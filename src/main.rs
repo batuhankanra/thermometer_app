@@ -1,31 +1,72 @@
-use sysinfo::Components;
-use std::thread;
-use std::time::Duration;
+mod controller;
+mod model;
+mod view;
 
+use controller::input_handler::handle_key;
+use controller::sensor_collection::SensorCollector;
+use crossterm::{
+    event::{self, Event},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use view::ui::draw;
+use model::app_state::{AppState, TICK_MS};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
-fn main(){
-    println!("Temperature sensors are being scanned...");
-    let  components: Components=Components::new_with_refreshed_list();
-
-    if components.list().is_empty(){
-        println!("No readable temperature sensor was found on your computer.");
-        println!("Not: Bazı işletim sistemlerinde (özellikle Windows) sıcaklık verilerine erişmek için uygulamayı Yönetici (Administrator) olarak çalıştırmanız gerekebilir.");
-        return;
+fn main() -> io::Result<()> {
+    let mut collector = SensorCollector::new();
+    if collector.is_empty() {
+        eprintln!("Hiçbir sıcaklık sensörü bulunamadı.");
+        eprintln!("Windows'ta Yönetici (Administrator) olarak çalıştırmayı deneyin.");
+        return Ok(());
     }
-    println!("Temperature readings are starting (Press Ctrl+C to exit)...\n");
+    enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+
+    let mut state = AppState::new();
+    collector.collect(&mut state);
+
+    let result = run(&mut terminal, &mut state, &mut collector);
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    result
+}
+
+fn run(
+    terminal:  &mut Terminal<CrosstermBackend<io::Stdout>>,
+    state:     &mut AppState,
+    collector: &mut SensorCollector,
+) -> io::Result<()> {
+    let tick    = Duration::from_millis(TICK_MS);
+    let mut last_tick = Instant::now();
+
     loop {
-        for component in &components{
-            if let Some(temp)=component.temperature(){
-                println!("{}: {:.1}°C",component.label(),temp);
-            }else {
-                println!("{}: (Sıcaklık verisi okunamadı)", component.label());
+        terminal.draw(|f| draw(f, state))?;
 
+        let timeout = tick.checked_sub(last_tick.elapsed()).unwrap_or_default();
+        if event::poll(timeout)? {
+            if let Event::Key(key) = event::read()? {
+                handle_key(state, key);
             }
-            println!("--------------------------\n");
-
-
-            thread::sleep(Duration::from_secs(2));
         }
 
+        if state.should_quit {
+            break;
+        }
+
+        if last_tick.elapsed() >= tick {
+            collector.collect(state);
+            last_tick = Instant::now();
+        }
     }
+
+    Ok(())
 }
