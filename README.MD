@@ -2,7 +2,7 @@
 
 Rust ile yazılmış, terminal tabanlı sıcaklık sensörü monitörü. MVC mimarisi ve `ratatui` ile anlık görselleştirme sunar.
 
-!(screenshot.png)
+![Thermometer App](screenshot.png)
 
 ---
 
@@ -24,8 +24,8 @@ Rust ile yazılmış, terminal tabanlı sıcaklık sensörü monitörü. MVC mim
 **Gereksinimler:** Rust 1.75+
 
 ```bash
-git clone https://github.com/kullaniciadi/tempmon
-cd tempmon
+git clone https://github.com/batuhankanra/thermometer_app
+cd thermometer_app
 cargo build --release
 ```
 
